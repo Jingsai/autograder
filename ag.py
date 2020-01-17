@@ -61,13 +61,13 @@ settings = config.get()
 subdirName = settings['subdirName']
 courseName = settings['courseName']
 assignmentName = settings['assignmentName']
-emailSubject  = settings['emailSubject']
-domainName    = settings['domainName']
-emailFrom     = settings['emailFrom']
-emailFromName = settings['emailFromName']
-emailPassword = settings['emailPassword']
-emailSmtp     = settings['emailSmtp']
-emailSmtpPort = settings['emailSmtpPort']
+# emailSubject  = settings['emailSubject']
+# domainName    = settings['domainName']
+# emailFrom     = settings['emailFrom']
+# emailFromName = settings['emailFromName']
+# emailPassword = settings['emailPassword']
+# emailSmtp     = settings['emailSmtp']
+# emailSmtpPort = settings['emailSmtpPort']
 
 
 def changeLock(dirs, lock):

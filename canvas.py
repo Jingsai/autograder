@@ -5,7 +5,7 @@ import textwrap
 import sys,shutil,os,stat,time,hashlib,re
 from pprint import pprint
 import argparse
-
+import re
 
 # To use this Python class, you should create a file named
 # .canvas-token in your home directory. It should contain the lines:
@@ -515,10 +515,7 @@ class canvas():
         """Downloads a specific submission from a student into a directory."""
 
         #self.prettyPrint(submission)
-
-        attachment = submission['attachments'][0]
-        filename = attachment['filename']
-        exten = os.path.splitext(filename)[1] # get filename extension
+ 
         import datetime
         utc_dt = datetime.datetime.strptime(submission['submitted_at'], '%Y-%m-%dT%H:%M:%SZ')
         utc_dt = utc_dt.replace(tzinfo=datetime.timezone.utc)
@@ -553,7 +550,7 @@ class canvas():
         # into a directory.
         metadataFile = None;
         metadataFiles = [ os.path.join(directory,login+".AUTOGRADE.json"),
-                          os.path.join(directory,login,"AUTOGRADE.json") ]
+                        os.path.join(directory,login,"AUTOGRADE.json") ]
         for mdf in metadataFiles:
             if os.path.exists(mdf):
                 metadataFile = mdf
@@ -570,7 +567,7 @@ class canvas():
         locked = metadataCache.get("locked", 0)
 
         if 'canvasSubmission' not in metadataCache or \
-           'attempt' not in metadataCache['canvasSubmission']:
+        'attempt' not in metadataCache['canvasSubmission']:
             print("%-12s Assuming cached submission is attempt 0" % login)
             cachedAttempt = 0
         else:
@@ -598,21 +595,29 @@ class canvas():
             print("%-12s WARNING: You requested attempt %2d; directory contains newer attempt %2d; SKIPPING DOWNLOAD. To force a download, erase the student directory and rerun. Or, rerun and request to dowload that students' specific attempt." % (login, newAttempt, cachedAttempt))
             return
 
-        archiveFile  = os.path.join(directory,login+exten)
 
-        # Delete existing archive if it exists.
-        toDelete = metadataFiles
-        toDelete.append(archiveFile)
-        for f in toDelete:
-            if os.path.exists(archiveFile):
-                os.unlink(archiveFile)
         # Download the file
         print("%-12s downloading attempt %d submitted %s (replacing attempt %d)" % (login, newAttempt, 
-              self.prettyDate(utc_dt, datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)), cachedAttempt))
+            self.prettyDate(utc_dt, datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)), cachedAttempt))
         try:
-            downloadFileName=directory+"/"+login+exten
-            urllib.request.urlretrieve(attachment['url'], downloadFileName)
-            print("%-12s submission size was %s" % (login, self.humanSize(os.stat(downloadFileName).st_size)))
+            #downloadFileName=directory+"/"+login+exten
+            for num in range(len(submission['attachments'])):
+                attachment = submission['attachments'][num]  # [0]
+                filename = attachment['filename']
+                exten = os.path.splitext(filename)[1] # get filename extension
+
+                archiveFile  = os.path.join(directory,login+'_'+filename)
+                # Delete existing archive if it exists.
+                toDelete = metadataFiles
+                toDelete.append(archiveFile)
+                for f in toDelete:
+                    if os.path.exists(archiveFile):
+                        os.unlink(archiveFile)
+
+                downloadFileName=directory+"/"+login+'_'+filename
+                #print(downloadFileName)
+                urllib.request.urlretrieve(attachment['url'], downloadFileName)
+                print("%-12s submission size was %s" % (login, self.humanSize(os.stat(downloadFileName).st_size)))
         except:
             print("ERROR: Failed to download "+attachment['url'])
             import traceback
@@ -633,14 +638,21 @@ class canvas():
         if not os.path.exists(dir):
             os.makedirs(dir)
         # require one attachment
+        # length of submissions is the number of students - Jingsai 
         for i in submissions:
+            #print(len(i['attachments']))
+            #len(i['attachments']) == 1 and \
             if i != None and \
                'attachments' in i and \
-               len(i['attachments']) == 1 and \
+               len(i['attachments']) and \
                i['attachments'][0]['url'] and \
                i['attachments'][0]['filename']:
                 student = self.findStudent(students, i['user_id'])
+                #print(i,student)
+                #print()
                 if student:
+                    #print(i,student)
+                    #print("what is thi\n")
                     self.downloadSubmission(i, student, dir, group_memberships)
 
 
@@ -650,7 +662,7 @@ class canvas():
         onlyfiles.sort()
         return onlyfiles
 
-    def extractAllFiles(self, dir=".", newSubdir=False):
+    def extractAllFiles(self, students, dir=".", newSubdir=False):
         print("Extracting all files into: " + dir)
         files = self.get_immediate_files(dir)
         # Here, we assume all files in the destination directory can
@@ -659,7 +671,7 @@ class canvas():
         # .AUTOGRADE.json) next to it.
         for f in files:
             if not f.endswith(".AUTOGRADE.json"):
-                self.extractFile(dir+"/"+f, dir, newSubdir)
+                self.extractFile(dir+"/"+f, dir, students, newSubdir)
 
     def removeExecutables(self, subdirName):
         """Remove executable/ELF/EXE files anywhere in the subdirectory."""
@@ -801,7 +813,7 @@ class canvas():
                 except OSError:
                     pass
                 
-    def extractFile(self, filename, dir, newSubdir=False):
+    def extractFile(self, filename, dir, students, newSubdir=False):
         """Extracts filename into dir. If newSubdir is set, create an additional subdirectory inside of dir to extract the files into."""
 
         if os.path.basename(filename).startswith("."):
@@ -810,11 +822,24 @@ class canvas():
         
         import tarfile,zipfile
         destDir = dir
+        #print(destDir)
+        destDir_rm_json = ""
         if newSubdir:
             # If using newSubdir, make a directory with the same
             # name as the file but without the extension.
-            destDir = os.path.splitext(filename)[0]
-
+            destDir_tmp = os.path.splitext(filename)[0]
+            student_id = re.findall("/[a-z0-9]+", destDir_tmp)[0][1:]
+            student_name = ""
+            for student in students:
+                if student["login_id"] == student_id:
+                    student_name = student["name"]
+            #print(student_name)
+            #print(filename, destDir_tmp)
+            destDir_rm_json=re.findall("^[a-z0-9]+/",destDir_tmp)[0] + '.'
+            folder_name = re.findall("[a-z0-9]+/", destDir_tmp)[0]
+            destDir = folder_name + student_name
+        #print(newSubdir)
+        #print(destDir)
 
         # Calculate md5sum
         md5sum = ""
@@ -827,13 +852,14 @@ class canvas():
                 m.update(data)
             md5sum = m.hexdigest()
 
-        if os.path.exists(destDir):
-            shutil.rmtree(destDir)
+        # if os.path.exists(destDir):
+        #     shutil.rmtree(destDir)
 
         # Ensure destination directory exists. If a student submits an
         # empty tgz file, for example, the code below won't create the
         # empty directory.
-        os.mkdir(destDir)
+        if not os.path.exists(destDir):
+            os.mkdir(destDir)
         try:
             # tarfile.is_tarfile() and zipfile.is_zipfile() functions
             # are available, but sometimes it misidentifies files (for
@@ -862,7 +888,9 @@ class canvas():
                 # subdirectories. Removing this line may break a
                 # variety of different elements of the autograder.
                 print("Trying to move "+filename+" to "+destDir)
-                shutil.move(filename, destDir)
+                re_filename = re.findall("_[a-zA-Z.]+", filename)[0][1:]
+                os.rename(filename, re_filename)
+                shutil.move(re_filename, destDir)
                 print(destDir + ": No need to extract " + filename);
         except:
             print(destDir + ": Failed to extract file: "+filename)
@@ -918,8 +946,11 @@ class canvas():
 
             # Remove original metadata file, write one out in the
             # subdirectory.
+            
             metadataFileDestDir = os.path.join(destDir,"AUTOGRADE.json")
-            os.remove(metadataFile)
+            #metadataFileDestDir = os.path.join(destDir_rm_json,"AUTOGRADE.json")
+            if os.path.isfile(metadataFile):
+                os.remove(metadataFile)
             with open(metadataFileDestDir, "w") as f:
                 json.dump(metadata, f, indent=4)
 
@@ -976,6 +1007,7 @@ class canvas():
 
         # Find the assignment in the list of assignments
         assignmentId = self.findAssignmentId(assignments, assignmentName)
+
         if assignmentId == None:
             self.printAssignmentIds(assignments)
             print("Failed to find assignment " + assignmentName);
@@ -1010,7 +1042,7 @@ class canvas():
         # Assuming zip, tgz, or tar.gz files are submitted, extract
         # them into subdirectories named after the student usernames.
         if subdirName:
-            self.extractAllFiles(dir=subdirName,newSubdir=True)
+            self.extractAllFiles(students, dir=subdirName,newSubdir=True)
         else:
             self.extractAllFiles()
 

@@ -1,0 +1,8 @@
+{                                                 
+    "courseName":"Algorithms & Data Structures Sect. 01 19FA", 
+    "assignmentName":"lab5",         
+    "subdirName":"lab5",
+    "IsInSolutionFolder": "True",
+    "ImportFiles": ["testMyGraph.py", "graph-1.txt", "graph-2.txt", "graph-3.txt", "graph-4.txt"],
+    "assignmentPath": "/Users/jliang/Documents/Westminster/CMPT306-Algorithms/2019Fall/CMPT306/"
+}
